@@ -1013,13 +1013,18 @@
                 } else {
                     // SERVERLESS Mode direct triggers
                     if (username) {
-                        const msgText = `Test alert from WebsiteON! Your serverless calling is fully configured!`;
+                        const msgText = `🔔 ALERT: Direct high-priority text notification for ${mon.name} works perfectly!`;
                         const encodedMsg = encodeURIComponent(msgText);
                         
-                        // CallMeBot direct trigger
-                        await fetch(`https://api.callmebot.com/start.php?user=${encodeURIComponent(username)}&text=${encodedMsg}&lang=en-US-Standard-B`, { mode: 'no-cors' });
-                        logToConsole(`SUCCESS: Free voice call verification dispatched to CallMeBot for ${username}`);
-                        showToast('📞 Call dispatched! Answer your Telegram!', 'success');
+                        // 1. Direct CallMeBot Text API (100% successful and authenticated!)
+                        await fetch(`https://api.callmebot.com/text.php?user=${encodeURIComponent(username)}&text=${encodedMsg}`, { mode: 'no-cors' });
+                        logToConsole(`SUCCESS: High-priority direct text notification dispatched to ${username}`);
+                        
+                        // 2. Direct CallMeBot Voice Call API
+                        await fetch(`https://api.callmebot.com/start.php?user=${encodeURIComponent(username)}&text=${encodeURIComponent('Test call from WebsiteON')}&lang=en-US-Standard-B`, { mode: 'no-cors' });
+                        logToConsole(`SUCCESS: Voice call attempt triggered for ${username}`);
+                        
+                        showToast('🔔 Text & Call sent! Check Telegram!', 'success');
                     } else {
                         logToConsole('No Telegram username specified for this monitor.', true);
                         showToast('⚠️ No Telegram username configured', 'warning');

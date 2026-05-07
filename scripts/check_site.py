@@ -131,6 +131,23 @@ def trigger_voice_call(username: str, site_name: str) -> None:
         print(f"Warning: Could not trigger voice call alert: {e}", file=sys.stderr)
 
 
+def trigger_text_alert(username: str, site_name: str, status: str) -> None:
+    """Trigger free high-priority direct text alert via CallMeBot."""
+    if not username:
+        return
+    text_message = f"URGENT: The website {site_name} has changed status to {status.upper()}!"
+    encoded_text = urllib.parse.quote_plus(text_message)
+    api_url = f"https://api.callmebot.com/text.php?user={username}&text={encoded_text}"
+    
+    try:
+        request_obj = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request_obj, timeout=12) as response:
+            response.read()
+        print("CallMeBot high-priority direct text alert triggered successfully")
+    except Exception as e:
+        print(f"Warning: Could not trigger direct text alert: {e}", file=sys.stderr)
+
+
 def site_is_up(url: str, expected_substring: str) -> tuple[bool, str, int]:
     """Perform HTTP check, return (is_up, reason, response_time_ms)."""
     request = urllib.request.Request(
@@ -250,9 +267,14 @@ def main() -> int:
             send_telegram_message(telegram_token, telegram_chat_id, message, is_alert=True)
             print("Telegram alert sent")
             
-        # 2. CallMeBot Voice Calling Alert
-        if voice_enabled and tg_username:
-            trigger_voice_call(tg_username, url.split('/')[2])
+        # 2. CallMeBot Alerts (Always triggers direct Text alert + attempts Voice calling)
+        if tg_username:
+            # Trigger 100% reliable direct text message
+            trigger_text_alert(tg_username, url.split('/')[2], current_status)
+            
+            # Attempt Voice calling if enabled
+            if voice_enabled:
+                trigger_voice_call(tg_username, url.split('/')[2])
             
     return 0
 

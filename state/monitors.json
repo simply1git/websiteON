@@ -18,5 +18,17 @@
     "last_checked": 1778157830,
     "expected_substring": "",
     "alert_enabled": true
+  },
+  {
+    "id": "vtu-applied-internships",
+    "name": "VTU applied internships",
+    "url": "https://vtu.internyet.in/dashboard/student/applied-internships",
+    "status": "up",
+    "reason": "http_status_200",
+    "last_checked": 1778158141,
+    "expected_substring": "",
+    "alert_enabled": true,
+    "telegram_username": "@Youtube_Times",
+    "voice_alerts_enabled": true
   }
 ]

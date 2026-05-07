@@ -1,5 +1,15 @@
 [
   {
+    "monitor_id": "vtu-applied-internships",
+    "url": "https://vtu.internyet.in/dashboard/student/applied-internships",
+    "status": "up",
+    "latency": 401,
+    "status_code": 200,
+    "reason": "http_status_200",
+    "timestamp": 1778158141,
+    "formatted_time": "2026-05-07 18:19:01"
+  },
+  {
     "monitor_id": "vtu-portal",
     "url": "https://online.vtu.ac.in/",
     "status": "down",
