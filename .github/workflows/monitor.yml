@@ -22,7 +22,7 @@ jobs:
 
       - name: Check website and alert Telegram
         env:
-          MONITOR_URL: https://online.vtu.ac.in/
+          MONITOR_URL: https://vtu.internyet.in/dashboard/student/applied-internships
           STATE_FILE: state/site-status.json
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
