@@ -114,30 +114,6 @@
             gap: 16px;
         }
 
-        .mode-selector {
-            font-family: var(--font-mono);
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--glass-border);
-            padding: 10px 16px;
-            border-radius: 12px;
-            color: var(--text-main);
-            font-size: 0.85em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.25s;
-        }
-        .mode-selector:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: var(--primary);
-        }
-        .mode-selector.cloud {
-            color: var(--accent);
-            border-color: rgba(6, 182, 212, 0.3);
-            background: rgba(6, 182, 212, 0.05);
-        }
-
         .live-clock {
             font-family: var(--font-mono);
             background: var(--glass-bg);
@@ -584,9 +560,6 @@
                 <p>Premium Real-Time Website Monitoring Hub</p>
             </div>
             <div class="header-actions">
-                <div class="mode-selector" id="modeSelector" onclick="toggleMode()">
-                    🔌 Auto-detecting...
-                </div>
                 <div class="live-clock" id="liveClock">Loading Clock...</div>
                 <button class="btn btn-primary" id="addBtn" onclick="openAddModal()">
                     <span>➕ Add Monitor</span>
@@ -625,7 +598,7 @@
                     <h3>📟 Live Monitoring Output</h3>
                     <div class="terminal-box" id="terminalConsole">
                         <div class="terminal-line"><span class="timestamp">[17:30:00]</span> Initializing system status monitors...</div>
-                        <div class="terminal-line"><span class="timestamp">[17:30:01]</span> Smart dual-mode frontend ready.</div>
+                        <div class="terminal-line"><span class="timestamp">[17:30:01]</span> Unified API frontend ready.</div>
                     </div>
                 </div>
             </div>
@@ -681,11 +654,6 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://txekjbiathutfhxfzkhd.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZWtqYmlhdGh1dGZoeGZ6a2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNDQzOTEsImV4cCI6MjA5MzcyMDM5MX0.sK-obtcZ90MLeRZS8mDVvh3OXKKj92Foo3CYuM8TwSs';
-        const FALLBACK_MONITOR_URL = 'https://vtu.internyet.in/dashboard/student/applied-internships';
-
-        let isLocalMode = true; // Auto detected
         let monitorsData = [];
         let selectedMonitorId = null;
         let latencyChart = null;
@@ -695,40 +663,9 @@
             updateClock();
             setInterval(updateClock, 1000);
             initChart();
-            
-            // Smart auto-detection of server mode
-            const isLocalHost = window.location.port === '5000' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            isLocalMode = isLocalHost;
-            
-            updateModeDisplay();
             await loadMonitors(true);
-            
-            // Auto refresh state every 30 seconds
             setInterval(() => loadMonitors(false), 30000);
         });
-
-        // Toggle Mode explicitly
-        function toggleMode() {
-            isLocalMode = !isLocalMode;
-            updateModeDisplay();
-            loadMonitors(true);
-            logToConsole(`Switched dashboard mode to: ${isLocalMode ? 'Local Flask API' : 'Serverless Supabase Cloud'}`);
-        }
-
-        function updateModeDisplay() {
-            const selector = document.getElementById('modeSelector');
-            const checkAllBtn = document.getElementById('checkAllBtn');
-            
-            if (isLocalMode) {
-                selector.textContent = '🔌 Mode: Local (Flask)';
-                selector.className = 'mode-selector';
-                checkAllBtn.style.display = 'inline-flex';
-            } else {
-                selector.textContent = '☁️ Mode: Serverless (Supabase)';
-                selector.className = 'mode-selector cloud';
-                checkAllBtn.style.display = 'inline-flex';
-            }
-        }
 
         // Live Clock
         function updateClock() {
@@ -737,47 +674,11 @@
             document.getElementById('liveClock').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         }
 
-        // Supabase REST client fetcher
-        async function fetchFromSupabase(table, filters = {}) {
-            let url = `${SUPABASE_URL}/rest/v1/${table}`;
-            if (Object.keys(filters).length > 0) {
-                const filterStr = Object.entries(filters)
-                    .map(([key, value]) => `${key}=eq.${encodeURIComponent(value)}`)
-                    .join('&');
-                url += `?${filterStr}`;
-            }
-            
-            const response = await fetch(url, {
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${SUPABASE_KEY}`
-                }
-            });
-            return await response.json();
-        }
-
         // Fetch & render monitors
         async function loadMonitors(selectFirst = false) {
             try {
-                if (isLocalMode) {
-                    const res = await fetch('/api/monitors');
-                    monitorsData = await res.json();
-                } else {
-                    // Serverless direct Supabase fetch
-                    const data = await fetchFromSupabase('monitor_status');
-                    monitorsData = data.map((m, idx) => ({
-                        id: m.url, // URL acts as unique key on cloud
-                        name: m.name || m.url.split('/')[2] || m.url,
-                        url: m.url,
-                        status: m.status,
-                        reason: m.reason,
-                        last_checked: m.last_checked,
-                        expected_substring: '',
-                        alert_enabled: false,
-                        telegram_username: m.telegram_username,
-                        voice_alerts_enabled: m.voice_alerts_enabled
-                    }));
-                }
+                const res = await fetch('/api/monitors');
+                monitorsData = await res.json();
                 
                 renderMonitorsList();
                 
@@ -912,18 +813,9 @@
             if (!activeMon) return;
             
             try {
-                let logs = [];
-                if (isLocalMode) {
-                    const res = await fetch(`/api/history/${selectedMonitorId}`);
-                    const history = await res.json();
-                    logs = history.slice(0, 10).reverse();
-                } else {
-                    const history = await fetchFromSupabase('check_history', { url: activeMon.url });
-                    logs = history.slice(0, 10).reverse().map(h => ({
-                        timestamp: h.checked_at,
-                        latency: h.latency || 150
-                    }));
-                }
+                const res = await fetch(`/api/history/${encodeURIComponent(selectedMonitorId)}`);
+                const history = await res.json();
+                const logs = history.slice(0, 10).reverse();
                 
                 latencyChart.data.labels = logs.map(l => {
                     const time = new Date(l.timestamp * 1000);
@@ -957,32 +849,17 @@
             showToast('🔄 Running website health check...', 'info');
             
             try {
-                if (isLocalMode) {
-                    const res = await fetch(`/api/check/${id}`, { method: 'POST' });
-                    const result = await res.json();
-                    
-                    if (result.success) {
-                        const statusSymbol = result.status === 'up' ? '✅' : '❌';
-                        logToConsole(`SUCCESS: ${id} status is ${result.status.toUpperCase()} (${result.reason}) in ${result.latency}ms`);
-                        showToast(`${statusSymbol} Check complete! Status: ${result.status.toUpperCase()}`, 'success');
-                        loadMonitors(false);
-                    } else {
-                        logToConsole(`ERROR checking ${id}: ${result.error}`, true);
-                        showToast('✗ Website check failed', 'error');
-                    }
+                const res = await fetch(`/api/check/${encodeURIComponent(id)}`, { method: 'POST' });
+                const result = await res.json();
+                
+                if (result.success) {
+                    const statusSymbol = result.status === 'up' ? '✅' : '❌';
+                    logToConsole(`SUCCESS: ${id} status is ${result.status.toUpperCase()} (${result.reason}) in ${result.latency}ms`);
+                    showToast(`${statusSymbol} Check complete! Status: ${result.status.toUpperCase()}`, 'success');
+                    loadMonitors(false);
                 } else {
-                    // SERVERLESS Mode: Trigger the Database-level function via Supabase RPC!
-                    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/perform_website_checks`, {
-                        method: 'POST',
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`
-                        }
-                    });
-                    
-                    logToConsole(`SUCCESS: Direct database-level cloud check triggered via RPC.`);
-                    showToast(`✅ Cloud check completed successfully!`, 'success');
-                    setTimeout(() => loadMonitors(false), 2000); // Wait for async database execution
+                    logToConsole(`ERROR checking ${id}: ${result.error}`, true);
+                    showToast('✗ Website check failed', 'error');
                 }
             } catch (err) {
                 logToConsole(`HTTP Request Failure for ${id}`, true);
@@ -994,41 +871,19 @@
         async function testAlerts(id) {
             const mon = monitorsData.find(m => m.id === id);
             if (!mon) return;
-            const username = mon.telegram_username;
             
             logToConsole(`Initiating manual verification test for: ${mon.name}...`);
             showToast('📞 Dispatched verification check...', 'info');
             
             try {
-                if (isLocalMode) {
-                    const res = await fetch(`/api/test_alerts/${id}`, { method: 'POST' });
-                    const result = await res.json();
-                    if (result.success) {
-                        logToConsole(`VERIFICATION LOG: ${result.output.join(', ')}`);
-                        showToast('✅ Test signals successfully dispatched!', 'success');
-                    } else {
-                        logToConsole(`Verification failed: ${result.error}`, true);
-                        showToast('✗ Verification failure', 'error');
-                    }
+                const res = await fetch(`/api/test_alerts/${encodeURIComponent(id)}`, { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    logToConsole(`VERIFICATION LOG: ${result.output.join(', ')}`);
+                    showToast('✅ Test signals successfully dispatched!', 'success');
                 } else {
-                    // SERVERLESS Mode direct triggers
-                    if (username) {
-                        const msgText = `🔔 ALERT: Direct high-priority text notification for ${mon.name} works perfectly!`;
-                        const encodedMsg = encodeURIComponent(msgText);
-                        
-                        // 1. Direct CallMeBot Text API (100% successful and authenticated!)
-                        await fetch(`https://api.callmebot.com/text.php?user=${encodeURIComponent(username)}&text=${encodedMsg}`, { mode: 'no-cors' });
-                        logToConsole(`SUCCESS: High-priority direct text notification dispatched to ${username}`);
-                        
-                        // 2. Direct CallMeBot Voice Call API
-                        await fetch(`https://api.callmebot.com/start.php?user=${encodeURIComponent(username)}&text=${encodeURIComponent('Test call from WebsiteON')}&lang=en-US-Standard-B`, { mode: 'no-cors' });
-                        logToConsole(`SUCCESS: Voice call attempt triggered for ${username}`);
-                        
-                        showToast('🔔 Text & Call sent! Check Telegram!', 'success');
-                    } else {
-                        logToConsole('No Telegram username specified for this monitor.', true);
-                        showToast('⚠️ No Telegram username configured', 'warning');
-                    }
+                    logToConsole(`Verification failed: ${result.error}`, true);
+                    showToast('✗ Verification failure', 'error');
                 }
             } catch (err) {
                 logToConsole(`Test alert trigger failure: ${err.message}`, true);
@@ -1042,29 +897,15 @@
             showToast('🔄 Executing comprehensive check...', 'info');
             
             try {
-                if (isLocalMode) {
-                    const res = await fetch('/api/check_all', { method: 'POST' });
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        logToConsole('Global health check completed successfully.');
-                        showToast('✅ All monitors verified!', 'success');
-                        loadMonitors(false);
-                    } else {
-                        logToConsole('Global health check encountered some errors.', true);
-                    }
+                const res = await fetch('/api/check_all', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    logToConsole('Global health check completed successfully.');
+                    showToast('✅ All monitors verified!', 'success');
+                    loadMonitors(false);
                 } else {
-                    // Serverless RPC Check All
-                    await fetch(`${SUPABASE_URL}/rest/v1/rpc/perform_website_checks`, {
-                        method: 'POST',
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`
-                        }
-                    });
-                    logToConsole('Global cloud checking function executed successfully.');
-                    showToast('✅ All cloud monitors checked!', 'success');
-                    setTimeout(() => loadMonitors(false), 2000);
+                    logToConsole('Global health check encountered some errors.', true);
                 }
             } catch (err) {
                 logToConsole('Failed to reach global check endpoint.', true);
@@ -1078,32 +919,16 @@
             
             logToConsole(`Deleting monitor configuration: ${id}...`);
             try {
-                if (isLocalMode) {
-                    const res = await fetch(`/api/monitors/${id}`, { method: 'DELETE' });
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        logToConsole(`Monitor ${id} deleted successfully.`);
-                        showToast('🗑️ Monitor removed', 'success');
-                        if (selectedMonitorId === id) selectedMonitorId = null;
-                        loadMonitors(true);
-                    } else {
-                        logToConsole(`Failed to delete ${id}: ${data.error}`, true);
-                    }
-                } else {
-                    // SERVERLESS Direct Supabase DELETE
-                    const res = await fetch(`${SUPABASE_URL}/rest/v1/monitor_status?url=eq.${encodeURIComponent(id)}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`
-                        }
-                    });
-                    
-                    logToConsole(`Successfully deleted monitor from Supabase cloud: ${id}`);
-                    showToast('🗑️ Cloud monitor removed', 'success');
+                const res = await fetch(`/api/monitors/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    logToConsole(`Monitor ${id} deleted successfully.`);
+                    showToast('🗑️ Monitor removed', 'success');
                     if (selectedMonitorId === id) selectedMonitorId = null;
                     loadMonitors(true);
+                } else {
+                    logToConsole(`Failed to delete ${id}: ${data.error}`, true);
                 }
             } catch (err) {
                 logToConsole(`Network error during deletion of ${id}`, true);
@@ -1123,64 +948,29 @@
             logToConsole(`Adding new target monitor: ${name} (${url})...`);
             
             try {
-                if (isLocalMode) {
-                    const res = await fetch('/api/monitors', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: name,
-                            url: url,
-                            expected_substring: sub,
-                            alert_enabled: alerts,
-                            telegram_username: tgUser,
-                            voice_alerts_enabled: voice
-                        })
-                    });
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        logToConsole(`Successfully registered monitor: ${data.monitor.id}`);
-                        showToast('✓ Monitor added successfully!', 'success');
-                        closeAddModal();
-                        selectedMonitorId = data.monitor.id;
-                        loadMonitors(false);
-                    } else {
-                        logToConsole(`Failed to register monitor: ${data.error}`, true);
-                        showToast(`✗ Failed: ${data.error}`, 'error');
-                    }
+                const res = await fetch('/api/monitors', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        url: url,
+                        expected_substring: sub,
+                        alert_enabled: alerts,
+                        telegram_username: tgUser,
+                        voice_alerts_enabled: voice
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    logToConsole(`Successfully registered monitor: ${data.monitor.id}`);
+                    showToast('✓ Monitor added successfully!', 'success');
+                    closeAddModal();
+                    selectedMonitorId = data.monitor.id;
+                    loadMonitors(false);
                 } else {
-                    // SERVERLESS Direct Supabase INSERT!
-                    const res = await fetch(`${SUPABASE_URL}/rest/v1/monitor_status`, {
-                        method: 'POST',
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`,
-                            'Content-Type': 'application/json',
-                            'Prefer': 'return=representation'
-                        },
-                        body: JSON.stringify({
-                            url: url,
-                            name: name,
-                            status: 'unknown',
-                            reason: 'Never checked',
-                            last_checked: Math.floor(Date.now() / 1000),
-                            telegram_username: tgUser,
-                            voice_alerts_enabled: voice
-                        })
-                    });
-                    
-                    if (!res.ok) {
-                        const errBody = await res.json();
-                        const errMessage = errBody.message || "Unknown Supabase error";
-                        logToConsole(`Supabase Write Failed: ${errMessage}. Make sure setup.sql is executed!`, true);
-                        showToast(`✗ Error adding: ${errMessage}`, 'error');
-                    } else {
-                        logToConsole(`Successfully added cloud monitor: ${name}`);
-                        showToast('✓ Cloud monitor added successfully!', 'success');
-                        closeAddModal();
-                        selectedMonitorId = url;
-                        loadMonitors(false);
-                    }
+                    logToConsole(`Failed to register monitor: ${data.error}`, true);
+                    showToast(`✗ Failed: ${data.error}`, 'error');
                 }
             } catch (err) {
                 logToConsole(`Connection error during monitor registration: ${err.message}`, true);
