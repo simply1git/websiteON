@@ -243,6 +243,7 @@
         // Supabase config - replace with your values
         const SUPABASE_URL = 'https://txekjbiathutfhxfzkhd.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZWtqYmlhdGh1dGZoeGZ6a2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNDQzOTEsImV4cCI6MjA5MzcyMDM5MX0.sK-obtcZ90MLeRZS8mDVvh3OXKKj92Foo3CYuM8TwSs';
+        const FALLBACK_MONITOR_URL = 'https://vtu.internyet.in/dashboard/student/applied-internships';
         
         async function fetchFromSupabase(table, filters = {}) {
             let url = `${SUPABASE_URL}/rest/v1/${table}`;
@@ -278,24 +279,25 @@
             try {
                 const mainContent = document.getElementById('mainContent');
                 
-                // Fetch current status (need to get the URL first)
+                // Try to fetch the configured URL first, but fall back to the known monitor URL
+                let url = FALLBACK_MONITOR_URL;
                 const configs = await fetchFromSupabase('monitor_config');
-                if (configs.length === 0) {
-                    throw new Error('No monitoring configuration found');
+                if (configs.length > 0 && configs[0].url) {
+                    url = configs[0].url;
                 }
-                
-                const url = configs[0].url;
                 
                 // Fetch current status
                 const statusResult = await fetchFromSupabase('monitor_status', { url });
-                if (statusResult.length === 0) {
-                    throw new Error('No status data available');
-                }
-                
-                const status = statusResult[0];
+                const status = statusResult.length > 0
+                    ? statusResult[0]
+                    : {
+                        status: 'unknown',
+                        reason: 'No status data available yet',
+                        last_checked: 0
+                    };
                 
                 // Fetch recent history
-                const history = await fetchFromSupabase('check_history');
+                const history = await fetchFromSupabase('check_history', { url });
                 const recentHistory = history
                     .sort((a, b) => b.checked_at - a.checked_at)
                     .slice(0, 10);
