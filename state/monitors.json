@@ -15,7 +15,7 @@
     "url": "https://online.vtu.ac.in/",
     "status": "down",
     "reason": "url_error_[Errno 11002] getaddrinfo failed",
-    "last_checked": 1778156737,
+    "last_checked": 1778157830,
     "expected_substring": "",
     "alert_enabled": true
   }

@@ -8,8 +8,12 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- 2. Create Monitor Status Table
-create table if not exists public.monitor_status (
+-- 2. Clean Up Old Schemas (Forces Recreation)
+drop table if exists public.check_history cascade;
+drop table if exists public.monitor_status cascade;
+
+-- 3. Create Monitor Status Table
+create table public.monitor_status (
     url text primary key,
     name text not null default '',
     status text not null default 'unknown',
@@ -19,8 +23,8 @@ create table if not exists public.monitor_status (
     voice_alerts_enabled boolean not null default false
 );
 
--- 3. Create Check History Table
-create table if not exists public.check_history (
+-- 4. Create Check History Table
+create table public.check_history (
     id bigint generated always as identity primary key,
     url text not null,
     status text not null,
@@ -29,7 +33,7 @@ create table if not exists public.check_history (
     latency bigint default 0
 );
 
--- 4. Insert Default Monitor (if not already existing)
+-- 5. Insert Default Monitor (if not already existing)
 insert into public.monitor_status (url, name, status, reason, last_checked, telegram_username, voice_alerts_enabled)
 values (
     'https://vtu.internyet.in/dashboard/student/applied-internships', 
@@ -42,7 +46,7 @@ values (
 )
 on conflict (url) do nothing;
 
--- 5. Create Automated Status Checker Function with CallMeBot Voice Calling
+-- 6. Create Automated Status Checker Function with CallMeBot Voice Calling
 create or replace function public.perform_website_checks()
 returns void as $$
 declare
@@ -90,14 +94,14 @@ select string_agg(
 from regexp_split_to_table($1, '') c;
 $$ language sql immutable;
 
--- 6. Schedule Checker to Run Every 5 Minutes via pg_cron
+-- 7. Schedule Checker to Run Every 5 Minutes via pg_cron
 select cron.schedule(
     'websiteon-checker-cron',
     '*/5 * * * *',
     'select public.perform_website_checks();'
 );
 
--- 7. Enable Row Level Security (RLS) & Policies for 100% Client-Side CRUD
+-- 8. Enable Row Level Security (RLS) & Policies for 100% Client-Side CRUD
 alter table public.monitor_status enable row level security;
 alter table public.check_history enable row level security;
 
