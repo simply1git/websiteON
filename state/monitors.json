@@ -1,0 +1,22 @@
+[
+  {
+    "id": "vtu-internships",
+    "name": "VTU Applied Internships",
+    "url": "https://vtu.internyet.in/dashboard/student/applied-internships",
+    "status": "up",
+    "reason": "http_status_200",
+    "last_checked": 1778156728,
+    "expected_substring": "",
+    "alert_enabled": true
+  },
+  {
+    "id": "vtu-portal",
+    "name": "VTU Main Portal",
+    "url": "https://online.vtu.ac.in/",
+    "status": "down",
+    "reason": "url_error_[Errno 11002] getaddrinfo failed",
+    "last_checked": 1778156737,
+    "expected_substring": "",
+    "alert_enabled": true
+  }
+]

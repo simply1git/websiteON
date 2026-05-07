@@ -62,7 +62,7 @@ $$ language plpgsql security definer;
 -- 6. Schedule Checker to Run Every 5 Minutes via pg_cron
 select cron.schedule(
     'websiteon-checker-cron',
-    '*/5 * * * *',
+    '*/1 * * * *',
     'select public.perform_website_checks();'
 );
 

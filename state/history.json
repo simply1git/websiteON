@@ -1,0 +1,32 @@
+[
+  {
+    "monitor_id": "vtu-portal",
+    "url": "https://online.vtu.ac.in/",
+    "status": "down",
+    "latency": 4205,
+    "status_code": 500,
+    "reason": "url_error_[Errno 11002] getaddrinfo failed",
+    "timestamp": 1778156737,
+    "formatted_time": "2026-05-07 17:55:37"
+  },
+  {
+    "monitor_id": "vtu-internships",
+    "url": "https://vtu.internyet.in/dashboard/student/applied-internships",
+    "status": "up",
+    "latency": 468,
+    "status_code": 200,
+    "reason": "http_status_200",
+    "timestamp": 1778156728,
+    "formatted_time": "2026-05-07 17:55:28"
+  },
+  {
+    "monitor_id": "vtu-portal",
+    "url": "https://online.vtu.ac.in/",
+    "status": "down",
+    "latency": 4274,
+    "status_code": 500,
+    "reason": "url_error_[Errno 11002] getaddrinfo failed",
+    "timestamp": 1778156685,
+    "formatted_time": "2026-05-07 17:54:45"
+  }
+]
