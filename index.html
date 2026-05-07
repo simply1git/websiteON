@@ -808,6 +808,7 @@
                 
                 const actionsHtml = `
                     <button class="btn btn-secondary btn-sm" style="padding: 6px 12px;" onclick="triggerCheck('${m.id}')" title="Check Site Now">⚡</button>
+                    <button class="btn btn-secondary btn-sm" style="padding: 6px 12px; background: rgba(6, 182, 212, 0.1); color: var(--accent); border-color: rgba(6, 182, 212, 0.3);" onclick="testAlerts('${m.id}')" title="🔔 Test Calling & Messages">📞 Test</button>
                     <a class="btn btn-secondary btn-sm" style="padding: 6px 12px; text-decoration: none;" href="/api/badge/${encodeURIComponent(m.id)}" target="_blank" title="View Status Badge">🛡️</a>
                     <button class="btn btn-danger btn-sm" style="padding: 6px 12px;" onclick="deleteMonitor('${m.id}')" title="Delete Monitor">🗑️</button>
                 `;
@@ -989,6 +990,47 @@
             }
         }
 
+        // Test Telegram call and message triggering
+        async function testAlerts(id) {
+            const mon = monitorsData.find(m => m.id === id);
+            if (!mon) return;
+            const username = mon.telegram_username;
+            
+            logToConsole(`Initiating manual verification test for: ${mon.name}...`);
+            showToast('📞 Dispatched verification check...', 'info');
+            
+            try {
+                if (isLocalMode) {
+                    const res = await fetch(`/api/test_alerts/${id}`, { method: 'POST' });
+                    const result = await res.json();
+                    if (result.success) {
+                        logToConsole(`VERIFICATION LOG: ${result.output.join(', ')}`);
+                        showToast('✅ Test signals successfully dispatched!', 'success');
+                    } else {
+                        logToConsole(`Verification failed: ${result.error}`, true);
+                        showToast('✗ Verification failure', 'error');
+                    }
+                } else {
+                    // SERVERLESS Mode direct triggers
+                    if (username) {
+                        const msgText = `Test alert from WebsiteON! Your serverless calling is fully configured!`;
+                        const encodedMsg = encodeURIComponent(msgText);
+                        
+                        // CallMeBot direct trigger
+                        await fetch(`https://api.callmebot.com/start.php?user=${encodeURIComponent(username)}&text=${encodedMsg}&lang=en-US-Standard-B`, { mode: 'no-cors' });
+                        logToConsole(`SUCCESS: Free voice call verification dispatched to CallMeBot for ${username}`);
+                        showToast('📞 Call dispatched! Answer your Telegram!', 'success');
+                    } else {
+                        logToConsole('No Telegram username specified for this monitor.', true);
+                        showToast('⚠️ No Telegram username configured', 'warning');
+                    }
+                }
+            } catch (err) {
+                logToConsole(`Test alert trigger failure: ${err.message}`, true);
+                showToast('✗ Alert check failed', 'error');
+            }
+        }
+
         // Check All Monitors
         async function checkAllMonitors() {
             logToConsole('Broadcasting global health check to all monitors...');
@@ -1122,14 +1164,22 @@
                         })
                     });
                     
-                    logToConsole(`Successfully added cloud monitor: ${name}`);
-                    showToast('✓ Cloud monitor added successfully!', 'success');
-                    closeAddModal();
-                    selectedMonitorId = url;
-                    loadMonitors(false);
+                    if (!res.ok) {
+                        const errBody = await res.json();
+                        const errMessage = errBody.message || "Unknown Supabase error";
+                        logToConsole(`Supabase Write Failed: ${errMessage}. Make sure setup.sql is executed!`, true);
+                        showToast(`✗ Error adding: ${errMessage}`, 'error');
+                    } else {
+                        logToConsole(`Successfully added cloud monitor: ${name}`);
+                        showToast('✓ Cloud monitor added successfully!', 'success');
+                        closeAddModal();
+                        selectedMonitorId = url;
+                        loadMonitors(false);
+                    }
                 }
             } catch (err) {
-                logToConsole('Connection error during monitor registration', true);
+                logToConsole(`Connection error during monitor registration: ${err.message}`, true);
+                showToast('✗ Network error adding monitor', 'error');
             }
         }
 

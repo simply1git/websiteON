@@ -299,6 +299,42 @@ def trigger_check_all():
     return jsonify({"success": True, "results": results})
 
 
+@app.route("/api/test_alerts/<monitor_id>", methods=["POST"])
+def test_alerts(monitor_id):
+    """Trigger an instant test message and call alert to verify notification services."""
+    monitors = load_monitors()
+    monitor = next((m for m in monitors if m["id"] == monitor_id), None)
+    if not monitor:
+        return jsonify({"success": False, "error": "Monitor not found"}), 404
+    
+    tg_user = monitor.get("telegram_username", "").strip()
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    
+    output = []
+    
+    # 1. Telegram Message Trigger
+    if telegram_token and telegram_chat_id:
+        try:
+            from scripts.check_site import send_telegram_message
+            msg = f"<b>🔔 WebsiteON Verification Alert</b>\nYour system notifications are working correctly for <b>{monitor['name']}</b>!"
+            send_telegram_message(telegram_token, telegram_chat_id, msg)
+            output.append("Telegram text message successfully sent")
+        except Exception as e:
+            output.append(f"Telegram failed: {e}")
+            
+    # 2. CallMeBot Trigger
+    if tg_user:
+        try:
+            from scripts.check_site import trigger_voice_call
+            trigger_voice_call(tg_user, monitor["name"])
+            output.append("Telegram phone call dispatched")
+        except Exception as e:
+            output.append(f"Voice call failed: {e}")
+            
+    return jsonify({"success": True, "output": output})
+
+
 @app.route("/api/history/<monitor_id>", methods=["GET"])
 def get_monitor_history(monitor_id):
     """Retrieve history data for a specific monitor."""
