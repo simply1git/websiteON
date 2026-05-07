@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from flask import Flask, jsonify, render_template, request, Response
 
-# Unified: Serve index.html directly from the root workspace folder
 app = Flask(__name__, template_folder=".", static_folder=".")
 
 STATE_DIR = Path("state")
@@ -28,7 +27,9 @@ def load_monitors():
                 "reason": "http_status_200",
                 "last_checked": int(time.time()),
                 "expected_substring": "",
-                "alert_enabled": True
+                "alert_enabled": True,
+                "telegram_username": "",
+                "voice_alerts_enabled": False
             },
             {
                 "id": "vtu-portal",
@@ -38,7 +39,9 @@ def load_monitors():
                 "reason": "http_status_200",
                 "last_checked": int(time.time()) - 180,
                 "expected_substring": "",
-                "alert_enabled": True
+                "alert_enabled": True,
+                "telegram_username": "",
+                "voice_alerts_enabled": False
             }
         ]
         save_monitors(default_monitors)
@@ -114,6 +117,8 @@ def add_monitor():
     url = data.get("url", "").strip()
     expected_substring = data.get("expected_substring", "").strip()
     alert_enabled = bool(data.get("alert_enabled", True))
+    telegram_username = data.get("telegram_username", "").strip()
+    voice_alerts_enabled = bool(data.get("voice_alerts_enabled", False))
     
     if not name or not url:
         return jsonify({"success": False, "error": "Name and URL are required"}), 400
@@ -138,7 +143,9 @@ def add_monitor():
         "reason": "Never checked",
         "last_checked": 0,
         "expected_substring": expected_substring,
-        "alert_enabled": alert_enabled
+        "alert_enabled": alert_enabled,
+        "telegram_username": telegram_username,
+        "voice_alerts_enabled": voice_alerts_enabled
     }
     
     monitors.append(new_monitor)

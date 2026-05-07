@@ -20,7 +20,6 @@ def supabase_request(table: str, method: str = "GET", data: dict = None, filters
     
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     
-    # Add filters to URL
     if filters:
         filter_str = "".join([f"&{k}=eq.{v}" for k, v in filters.items()])
         url += f"?{filter_str.lstrip('&')}"
@@ -55,26 +54,33 @@ def supabase_request(table: str, method: str = "GET", data: dict = None, filters
         return {}
 
 
-def get_previous_status() -> str:
-    """Get previous status from Supabase or local state file."""
+def get_previous_status() -> tuple[str, str, bool]:
+    """Get previous status, telegram username, and voice alerts enabled."""
     if SUPABASE_KEY:
         result = supabase_request("monitor_status", filters={"url": MONITOR_URL})
         if isinstance(result, list) and len(result) > 0:
-            return result[0].get("status", "unknown")
+            return (
+                result[0].get("status", "unknown"),
+                result[0].get("telegram_username", ""),
+                result[0].get("voice_alerts_enabled", False)
+            )
             
-    # Local fallback
     try:
         if os.path.exists(STATE_FILE_PATH):
             with open(STATE_FILE_PATH, "r") as f:
                 data = json.load(f)
-                return data.get("last_status", "unknown")
+                return (
+                    data.get("last_status", "unknown"),
+                    data.get("telegram_username", ""),
+                    data.get("voice_alerts_enabled", False)
+                )
     except Exception:
         pass
-    return "unknown"
+    return "unknown", "", False
 
 
 def save_status(status: str, reason: str, checked_at: int) -> None:
-    """Save current status to Supabase and local state file."""
+    """Save current status."""
     data = {
         "url": MONITOR_URL,
         "status": status,
@@ -82,7 +88,6 @@ def save_status(status: str, reason: str, checked_at: int) -> None:
         "last_checked": checked_at,
     }
     
-    # Save to local file
     try:
         os.makedirs(os.path.dirname(STATE_FILE_PATH), exist_ok=True)
         with open(STATE_FILE_PATH, "w") as f:
@@ -90,23 +95,40 @@ def save_status(status: str, reason: str, checked_at: int) -> None:
     except Exception as e:
         print(f"Warning: Local state write failed: {e}", file=sys.stderr)
 
-    # Save to Supabase if available
     if SUPABASE_KEY:
         result = supabase_request("monitor_status", method="PATCH", data=data)
         if not result or (isinstance(result, list) and len(result) == 0):
             supabase_request("monitor_status", method="POST", data=data)
 
 
-def save_history(status: str, reason: str, checked_at: int) -> None:
-    """Save check to history in Supabase."""
+def save_history(status: str, reason: str, checked_at: int, latency: int) -> None:
+    """Save check history."""
     if SUPABASE_KEY:
         data = {
             "url": MONITOR_URL,
             "status": status,
             "reason": reason,
             "checked_at": checked_at,
+            "latency": latency
         }
         supabase_request("check_history", method="POST", data=data)
+
+
+def trigger_voice_call(username: str, site_name: str) -> None:
+    """Trigger free voice call alert via CallMeBot."""
+    if not username:
+        return
+    text_message = f"Alert! The website {site_name} status has changed."
+    encoded_text = urllib.parse.quote_plus(text_message)
+    api_url = f"https://api.callmebot.com/start.php?user={username}&text={encoded_text}&lang=en-US-Standard-B"
+    
+    try:
+        request_obj = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request_obj, timeout=12) as response:
+            response.read()
+        print("CallMeBot voice alert triggered successfully")
+    except Exception as e:
+        print(f"Warning: Could not trigger voice call alert: {e}", file=sys.stderr)
 
 
 def site_is_up(url: str, expected_substring: str) -> tuple[bool, str, int]:
@@ -146,7 +168,6 @@ def site_is_up(url: str, expected_substring: str) -> tuple[bool, str, int]:
 def send_telegram_message(token: str, chat_id: str, message: str, is_alert: bool = False) -> None:
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
     
-    # Send urgent alert notification first
     if is_alert:
         alert_payload = urllib.parse.urlencode(
             {
@@ -163,7 +184,6 @@ def send_telegram_message(token: str, chat_id: str, message: str, is_alert: bool
         except Exception as e:
             print(f"Warning: Could not send alert notification: {e}", file=sys.stderr)
     
-    # Send detailed message
     payload = urllib.parse.urlencode(
         {
             "chat_id": chat_id,
@@ -193,12 +213,11 @@ def main() -> int:
         print(json.dumps({"error": "MONITOR_URL is required"}), file=sys.stderr)
         return 2
 
-    previous_status = get_previous_status()
+    previous_status, tg_username, voice_enabled = get_previous_status()
     is_up, reason, latency = site_is_up(url, expected_substring)
     current_status = "up" if is_up else "down"
     checked_at = int(time.time())
 
-    # Print JSON output to stdout for the app.py capture
     print(
         json.dumps(
             {
@@ -212,12 +231,12 @@ def main() -> int:
         )
     )
 
-    # Save status
     save_status(current_status, reason, checked_at)
-    save_history(current_status, reason, checked_at)
+    save_history(current_status, reason, checked_at, latency)
 
-    # Send alert if transitioned from down to up (or state changed)
+    # State transition alert trigger
     if previous_status != "unknown" and previous_status != current_status:
+        # 1. Telegram Message Alert
         if telegram_token and telegram_chat_id:
             status_symbol = "✅" if current_status == "up" else "❌"
             message = (
@@ -230,8 +249,10 @@ def main() -> int:
             )
             send_telegram_message(telegram_token, telegram_chat_id, message, is_alert=True)
             print("Telegram alert sent")
-        else:
-            print("Telegram secrets are missing, skipped alert message")
+            
+        # 2. CallMeBot Voice Calling Alert
+        if voice_enabled and tg_username:
+            trigger_voice_call(tg_username, url.split('/')[2])
             
     return 0
 

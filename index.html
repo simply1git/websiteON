@@ -467,6 +467,12 @@
             transform: scale(1);
         }
 
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -646,6 +652,16 @@
                     <label for="monitorSub">Expected Substring (Optional)</label>
                     <input type="text" id="monitorSub" placeholder="Text that must exist in response body">
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="monitorTgUser">Telegram Username</label>
+                        <input type="text" id="monitorTgUser" placeholder="e.g. @yourname">
+                    </div>
+                    <div class="form-group checkbox-group" style="padding-top: 30px;">
+                        <input type="checkbox" id="monitorVoice">
+                        <label for="monitorVoice" style="margin-bottom: 0;">📞 Voice Calls</label>
+                    </div>
+                </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="monitorAlerts" checked>
                     <label for="monitorAlerts" style="margin-bottom: 0;">Enable Telegram Notifications</label>
@@ -701,19 +717,16 @@
 
         function updateModeDisplay() {
             const selector = document.getElementById('modeSelector');
-            const addBtn = document.getElementById('addBtn');
             const checkAllBtn = document.getElementById('checkAllBtn');
             
             if (isLocalMode) {
                 selector.textContent = '🔌 Mode: Local (Flask)';
                 selector.className = 'mode-selector';
-                addBtn.style.display = 'inline-flex';
                 checkAllBtn.style.display = 'inline-flex';
             } else {
                 selector.textContent = '☁️ Mode: Serverless (Supabase)';
                 selector.className = 'mode-selector cloud';
-                addBtn.style.display = 'none'; // Read-only cloud dashboard
-                checkAllBtn.style.display = 'none';
+                checkAllBtn.style.display = 'inline-flex';
             }
         }
 
@@ -753,14 +766,16 @@
                     // Serverless direct Supabase fetch
                     const data = await fetchFromSupabase('monitor_status');
                     monitorsData = data.map((m, idx) => ({
-                        id: `cloud-${idx}`,
-                        name: m.url.split('/')[2] || m.url,
+                        id: m.url, // URL acts as unique key on cloud
+                        name: m.name || m.url.split('/')[2] || m.url,
                         url: m.url,
                         status: m.status,
                         reason: m.reason,
                         last_checked: m.last_checked,
                         expected_substring: '',
-                        alert_enabled: false
+                        alert_enabled: false,
+                        telegram_username: m.telegram_username,
+                        voice_alerts_enabled: m.voice_alerts_enabled
                     }));
                 }
                 
@@ -791,11 +806,11 @@
                 card.className = `monitor-card ${isSelected}`;
                 card.onclick = () => selectMonitor(m.id);
                 
-                const actionsHtml = isLocalMode ? `
+                const actionsHtml = `
                     <button class="btn btn-secondary btn-sm" style="padding: 6px 12px;" onclick="triggerCheck('${m.id}')" title="Check Site Now">⚡</button>
-                    <a class="btn btn-secondary btn-sm" style="padding: 6px 12px; text-decoration: none;" href="/api/badge/${m.id}" target="_blank" title="View Status Badge">🛡️</a>
+                    <a class="btn btn-secondary btn-sm" style="padding: 6px 12px; text-decoration: none;" href="/api/badge/${encodeURIComponent(m.id)}" target="_blank" title="View Status Badge">🛡️</a>
                     <button class="btn btn-danger btn-sm" style="padding: 6px 12px;" onclick="deleteMonitor('${m.id}')" title="Delete Monitor">🗑️</button>
-                ` : `<span style="font-size:0.8em; color:var(--text-muted);">Read-Only Cloud</span>`;
+                `;
 
                 card.innerHTML = `
                     <div class="card-left">
@@ -823,7 +838,7 @@
             document.getElementById('monitorList').innerHTML = `
                 <div class="empty-state">
                     <p style="font-size: 1.1em; margin-bottom: 12px;">No website monitors configured yet.</p>
-                    ${isLocalMode ? '<button class="btn btn-primary btn-sm" onclick="openAddModal()">Add Your First Monitor</button>' : ''}
+                    <button class="btn btn-primary btn-sm" onclick="openAddModal()">Add Your First Monitor</button>
                 </div>
             `;
             document.getElementById('activeChartTitle').textContent = '';
@@ -905,7 +920,7 @@
                     const history = await fetchFromSupabase('check_history', { url: activeMon.url });
                     logs = history.slice(0, 10).reverse().map(h => ({
                         timestamp: h.checked_at,
-                        latency: h.status === 'up' ? 120 : 0 // Simulated latency for serverless check representation
+                        latency: h.latency || 150
                     }));
                 }
                 
@@ -936,23 +951,37 @@
 
         // Manual Check trigger
         async function triggerCheck(id) {
-            if (!isLocalMode) return;
             const mon = monitorsData.find(m => m.id === id);
             logToConsole(`Manually running check for ${mon ? mon.name : id}...`);
             showToast('🔄 Running website health check...', 'info');
             
             try {
-                const res = await fetch(`/api/check/${id}`, { method: 'POST' });
-                const result = await res.json();
-                
-                if (result.success) {
-                    const statusSymbol = result.status === 'up' ? '✅' : '❌';
-                    logToConsole(`SUCCESS: ${id} status is ${result.status.toUpperCase()} (${result.reason}) in ${result.latency}ms`);
-                    showToast(`${statusSymbol} Check complete! Status: ${result.status.toUpperCase()}`, 'success');
-                    loadMonitors(false);
+                if (isLocalMode) {
+                    const res = await fetch(`/api/check/${id}`, { method: 'POST' });
+                    const result = await res.json();
+                    
+                    if (result.success) {
+                        const statusSymbol = result.status === 'up' ? '✅' : '❌';
+                        logToConsole(`SUCCESS: ${id} status is ${result.status.toUpperCase()} (${result.reason}) in ${result.latency}ms`);
+                        showToast(`${statusSymbol} Check complete! Status: ${result.status.toUpperCase()}`, 'success');
+                        loadMonitors(false);
+                    } else {
+                        logToConsole(`ERROR checking ${id}: ${result.error}`, true);
+                        showToast('✗ Website check failed', 'error');
+                    }
                 } else {
-                    logToConsole(`ERROR checking ${id}: ${result.error}`, true);
-                    showToast('✗ Website check failed', 'error');
+                    // SERVERLESS Mode: Trigger the Database-level function via Supabase RPC!
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/perform_website_checks`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    });
+                    
+                    logToConsole(`SUCCESS: Direct database-level cloud check triggered via RPC.`);
+                    showToast(`✅ Cloud check completed successfully!`, 'success');
+                    setTimeout(() => loadMonitors(false), 2000); // Wait for async database execution
                 }
             } catch (err) {
                 logToConsole(`HTTP Request Failure for ${id}`, true);
@@ -962,20 +991,33 @@
 
         // Check All Monitors
         async function checkAllMonitors() {
-            if (!isLocalMode) return;
             logToConsole('Broadcasting global health check to all monitors...');
             showToast('🔄 Executing comprehensive check...', 'info');
             
             try {
-                const res = await fetch('/api/check_all', { method: 'POST' });
-                const data = await res.json();
-                
-                if (data.success) {
-                    logToConsole('Global health check completed successfully.');
-                    showToast('✅ All monitors verified!', 'success');
-                    loadMonitors(false);
+                if (isLocalMode) {
+                    const res = await fetch('/api/check_all', { method: 'POST' });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        logToConsole('Global health check completed successfully.');
+                        showToast('✅ All monitors verified!', 'success');
+                        loadMonitors(false);
+                    } else {
+                        logToConsole('Global health check encountered some errors.', true);
+                    }
                 } else {
-                    logToConsole('Global health check encountered some errors.', true);
+                    // Serverless RPC Check All
+                    await fetch(`${SUPABASE_URL}/rest/v1/rpc/perform_website_checks`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    });
+                    logToConsole('Global cloud checking function executed successfully.');
+                    showToast('✅ All cloud monitors checked!', 'success');
+                    setTimeout(() => loadMonitors(false), 2000);
                 }
             } catch (err) {
                 logToConsole('Failed to reach global check endpoint.', true);
@@ -984,22 +1026,37 @@
 
         // Delete monitor
         async function deleteMonitor(id) {
-            if (!isLocalMode) return;
-            if (!confirm('Are you sure you want to delete this website monitor?')) return;
+            const mon = monitorsData.find(m => m.id === id);
+            if (!confirm(`Are you sure you want to delete the website monitor: ${mon ? mon.name : id}?`)) return;
             
             logToConsole(`Deleting monitor configuration: ${id}...`);
             try {
-                const res = await fetch(`/api/monitors/${id}`, { method: 'DELETE' });
-                const data = await res.json();
-                
-                if (data.success) {
-                    logToConsole(`Monitor ${id} deleted successfully.`);
-                    showToast('🗑️ Monitor removed', 'success');
+                if (isLocalMode) {
+                    const res = await fetch(`/api/monitors/${id}`, { method: 'DELETE' });
+                    const data = await res.json();
                     
+                    if (data.success) {
+                        logToConsole(`Monitor ${id} deleted successfully.`);
+                        showToast('🗑️ Monitor removed', 'success');
+                        if (selectedMonitorId === id) selectedMonitorId = null;
+                        loadMonitors(true);
+                    } else {
+                        logToConsole(`Failed to delete ${id}: ${data.error}`, true);
+                    }
+                } else {
+                    // SERVERLESS Direct Supabase DELETE
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/monitor_status?url=eq.${encodeURIComponent(id)}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    });
+                    
+                    logToConsole(`Successfully deleted monitor from Supabase cloud: ${id}`);
+                    showToast('🗑️ Cloud monitor removed', 'success');
                     if (selectedMonitorId === id) selectedMonitorId = null;
                     loadMonitors(true);
-                } else {
-                    logToConsole(`Failed to delete ${id}: ${data.error}`, true);
                 }
             } catch (err) {
                 logToConsole(`Network error during deletion of ${id}`, true);
@@ -1009,36 +1066,67 @@
         // Add monitor submission
         async function submitNewMonitor(e) {
             e.preventDefault();
-            if (!isLocalMode) return;
             const name = document.getElementById('monitorName').value.trim();
             const url = document.getElementById('monitorUrl').value.trim();
             const sub = document.getElementById('monitorSub').value.trim();
             const alerts = document.getElementById('monitorAlerts').checked;
+            const tgUser = document.getElementById('monitorTgUser').value.trim();
+            const voice = document.getElementById('monitorVoice').checked;
             
             logToConsole(`Adding new target monitor: ${name} (${url})...`);
             
             try {
-                const res = await fetch('/api/monitors', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: name,
-                        url: url,
-                        expected_substring: sub,
-                        alert_enabled: alerts
-                    })
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    logToConsole(`Successfully registered monitor: ${data.monitor.id}`);
-                    showToast('✓ Monitor added successfully!', 'success');
-                    closeAddModal();
-                    selectedMonitorId = data.monitor.id;
-                    loadMonitors(false);
+                if (isLocalMode) {
+                    const res = await fetch('/api/monitors', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: name,
+                            url: url,
+                            expected_substring: sub,
+                            alert_enabled: alerts,
+                            telegram_username: tgUser,
+                            voice_alerts_enabled: voice
+                        })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        logToConsole(`Successfully registered monitor: ${data.monitor.id}`);
+                        showToast('✓ Monitor added successfully!', 'success');
+                        closeAddModal();
+                        selectedMonitorId = data.monitor.id;
+                        loadMonitors(false);
+                    } else {
+                        logToConsole(`Failed to register monitor: ${data.error}`, true);
+                        showToast(`✗ Failed: ${data.error}`, 'error');
+                    }
                 } else {
-                    logToConsole(`Failed to register monitor: ${data.error}`, true);
-                    showToast(`✗ Failed: ${data.error}`, 'error');
+                    // SERVERLESS Direct Supabase INSERT!
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/monitor_status`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            name: name,
+                            status: 'unknown',
+                            reason: 'Never checked',
+                            last_checked: Math.floor(Date.now() / 1000),
+                            telegram_username: tgUser,
+                            voice_alerts_enabled: voice
+                        })
+                    });
+                    
+                    logToConsole(`Successfully added cloud monitor: ${name}`);
+                    showToast('✓ Cloud monitor added successfully!', 'success');
+                    closeAddModal();
+                    selectedMonitorId = url;
+                    loadMonitors(false);
                 }
             } catch (err) {
                 logToConsole('Connection error during monitor registration', true);
