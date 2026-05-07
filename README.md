@@ -92,10 +92,13 @@ Add these repository secrets:
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
 Optional:
 
 - `EXPECTED_SUBSTRING` to require a specific text fragment in the page before treating it as up.
+
+The public dashboard uses the Supabase anon key for read access only. The GitHub Actions workflow must use the service-role key so it can write `monitor_status` and `check_history` rows while RLS stays enabled.
 
 ## Telegram setup
 

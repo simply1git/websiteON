@@ -26,7 +26,7 @@ jobs:
         env:
           MONITOR_URL: https://vtu.internyet.in/dashboard/student/applied-internships
           SUPABASE_URL: https://txekjbiathutfhxfzkhd.supabase.co
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           STATE_FILE: state/site-status.json
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
