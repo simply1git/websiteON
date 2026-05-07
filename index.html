@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Monitor - Live Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .status-box {
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status-box.up {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+        
+        .status-box.down {
+            background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
+            color: white;
+        }
+        
+        .status-box.unknown {
+            background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%);
+            color: white;
+        }
+        
+        .status-box h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-box p {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        
+        .status-box small {
+            display: block;
+            margin-top: 10px;
+            opacity: 0.8;
+            font-size: 0.85em;
+        }
+        
+        .details {
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .detail-value {
+            color: #333;
+            font-family: monospace;
+        }
+        
+        .history-section {
+            margin-top: 20px;
+        }
+        
+        .history-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .history-item {
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-left: 4px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        
+        .history-item.up {
+            border-left-color: #4CAF50;
+        }
+        
+        .history-item.down {
+            border-left-color: #f44336;
+        }
+        
+        .history-time {
+            color: #999;
+            font-size: 0.85em;
+        }
+        
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 30px;
+            font-size: 0.9em;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .url-display {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 6px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 600px) {
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .detail-row {
+                flex-direction: column;
+            }
+            
+            .detail-value {
+                margin-top: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Website Monitor</h1>
+            <p>Real-time status powered by Supabase</p>
+        </div>
+        
+        <div class="card" id="mainContent">
+            <div class="loading">
+                <div class="spinner"></div>
+                Loading status...
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>🔄 Monitored via GitHub Actions every 5 minutes</p>
+            <p style="margin-top: 10px; font-size: 0.8em;">
+                Alerts sent to Telegram @websiteON_bot
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Supabase config - replace with your values
+        const SUPABASE_URL = 'https://txekjbiathutfhxfzkhd.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZWtqYmlhdGh1dGZoeGZ6a2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNDQzOTEsImV4cCI6MjA5MzcyMDM5MX0.sK-obtcZ90MLeRZS8mDVvh3OXKKj92Foo3CYuM8TwSs';
+        
+        async function fetchFromSupabase(table, filters = {}) {
+            let url = `${SUPABASE_URL}/rest/v1/${table}`;
+            
+            if (Object.keys(filters).length > 0) {
+                const filterStr = Object.entries(filters)
+                    .map(([key, value]) => `${key}=eq.${encodeURIComponent(value)}`)
+                    .join('&');
+                url += `?${filterStr}`;
+            }
+            
+            const response = await fetch(url, {
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Supabase error: ${response.statusText}`);
+            }
+            
+            return await response.json();
+        }
+        
+        function formatTime(timestamp) {
+            if (!timestamp || timestamp === 0) return 'Never';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+        
+        async function loadStatus() {
+            try {
+                const mainContent = document.getElementById('mainContent');
+                
+                // Fetch current status (need to get the URL first)
+                const configs = await fetchFromSupabase('monitor_config');
+                if (configs.length === 0) {
+                    throw new Error('No monitoring configuration found');
+                }
+                
+                const url = configs[0].url;
+                
+                // Fetch current status
+                const statusResult = await fetchFromSupabase('monitor_status', { url });
+                if (statusResult.length === 0) {
+                    throw new Error('No status data available');
+                }
+                
+                const status = statusResult[0];
+                
+                // Fetch recent history
+                const history = await fetchFromSupabase('check_history');
+                const recentHistory = history
+                    .sort((a, b) => b.checked_at - a.checked_at)
+                    .slice(0, 10);
+                
+                // Build HTML
+                let html = `
+                    <div class="status-grid">
+                        <div class="status-box ${status.status}">
+                            <h3>Current Status</h3>
+                            <p>${status.status.toUpperCase()}</p>
+                            <small>Last checked: ${formatTime(status.last_checked)}</small>
+                        </div>
+                        <div style="padding: 20px; background: #f5f5f5; border-radius: 8px;">
+                            <h3 style="color: #666; margin-bottom: 15px;">Check Details</h3>
+                            <div style="text-align: left; font-size: 0.95em;">
+                                <p><strong>Reason:</strong> ${status.reason || 'N/A'}</p>
+                                <p style="margin-top: 10px;"><strong>Last Updated:</strong> ${formatTime(status.last_checked)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="details">
+                        <div class="detail-row">
+                            <span class="detail-label">Monitored URL:</span>
+                            <span class="detail-value">${url}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value">${status.status}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Last Check:</span>
+                            <span class="detail-value">${formatTime(status.last_checked)}</span>
+                        </div>
+                    </div>
+                `;
+                
+                if (recentHistory.length > 0) {
+                    html += '<div class="history-section"><h3>Recent Check History</h3>';
+                    recentHistory.forEach(item => {
+                        html += `
+                            <div class="history-item ${item.status}">
+                                <div><strong>${item.status.toUpperCase()}</strong> - ${item.reason || 'N/A'}</div>
+                                <div class="history-time">${formatTime(item.checked_at)}</div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                mainContent.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading status:', error);
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="error">
+                        <strong>Error loading status:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Load status on page load
+        loadStatus();
+        
+        // Refresh every 30 seconds
+        setInterval(loadStatus, 30000);
+    </script>
+</body>
+</html>

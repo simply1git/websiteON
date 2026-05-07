@@ -25,23 +25,13 @@ jobs:
       - name: Check website and alert Telegram
         env:
           MONITOR_URL: https://vtu.internyet.in/dashboard/student/applied-internships
+          SUPABASE_URL: https://txekjbiathutfhxfzkhd.supabase.co
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           STATE_FILE: state/site-status.json
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EXPECTED_SUBSTRING: ${{ secrets.EXPECTED_SUBSTRING }}
         run: python scripts/check_site.py
 
-      - name: Commit updated state
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-        run: |
-          if git diff --quiet -- state/site-status.json; then
-            echo "No state changes"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state/site-status.json
-          git commit -m "Update website monitor state"
-          git push origin HEAD:$BRANCH_NAME
+      - name: Note
+        run: echo "Status synced to Supabase database"

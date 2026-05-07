@@ -1,33 +1,97 @@
 import json
+import json
 import os
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 
-def load_state(state_path: Path) -> str:
-    if not state_path.exists():
-        return "unknown"
+# Supabase config
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://txekjbiathutfhxfzkhd.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+MONITOR_URL = os.environ.get("MONITOR_URL", "https://online.vtu.ac.in/")
 
+
+def supabase_request(table: str, method: str = "GET", data: dict = None, filters: dict = None) -> dict:
+    """Make a request to Supabase REST API."""
+    if not SUPABASE_KEY:
+        print("ERROR: SUPABASE_KEY not set")
+        return {}
+    
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    
+    # Add filters to URL
+    if filters:
+        filter_str = "".join([f"&{k}=eq.{v}" for k, v in filters.items()])
+        url += f"?{filter_str.lstrip('&')}"
+    
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    
+    if method == "GET":
+        request_obj = urllib.request.Request(url, headers=headers, method="GET")
+    elif method == "POST":
+        body = json.dumps(data).encode("utf-8")
+        request_obj = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    elif method == "PATCH":
+        body = json.dumps(data).encode("utf-8")
+        url += f"?url=eq.{urllib.parse.quote(MONITOR_URL)}"
+        request_obj = urllib.request.Request(url, data=body, headers=headers, method="PATCH")
+    
     try:
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return "unknown"
+        with urllib.request.urlopen(request_obj, timeout=20) as response:
+            result = response.read().decode("utf-8")
+            return json.loads(result) if result else {}
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"ERROR: Supabase API error {e.code}: {error_body}", file=sys.stderr)
+        return {}
+    except Exception as e:
+        print(f"ERROR: Supabase request failed: {e}", file=sys.stderr)
+        return {}
 
-    return str(data.get("last_status", "unknown"))
+
+def get_previous_status() -> str:
+    """Get previous status from Supabase."""
+    result = supabase_request("monitor_status", filters={"url": MONITOR_URL})
+    
+    if isinstance(result, list) and len(result) > 0:
+        return result[0].get("status", "unknown")
+    return "unknown"
 
 
-def save_state(state_path: Path, status: str, checked_at: int) -> None:
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "last_status": status,
+def save_status(status: str, reason: str, checked_at: int) -> None:
+    """Save current status to Supabase."""
+    data = {
+        "url": MONITOR_URL,
+        "status": status,
+        "reason": reason,
+        "last_checked": checked_at,
+    }
+    
+    # Try PATCH first (update existing)
+    result = supabase_request("monitor_status", method="PATCH", data=data)
+    
+    # If no rows returned, insert new
+    if not result or (isinstance(result, list) and len(result) == 0):
+        supabase_request("monitor_status", method="POST", data=data)
+
+
+def save_history(status: str, reason: str, checked_at: int) -> None:
+    """Save to check history in Supabase."""
+    data = {
+        "url": MONITOR_URL,
+        "status": status,
+        "reason": reason,
         "checked_at": checked_at,
     }
-    state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
+    supabase_request("check_history", method="POST", data=data)
 
 def site_is_up(url: str, expected_substring: str) -> tuple[bool, str]:
     request = urllib.request.Request(
@@ -93,8 +157,7 @@ def send_telegram_message(token: str, chat_id: str, message: str, is_alert: bool
 
 
 def main() -> int:
-    url = os.environ.get("MONITOR_URL", "https://online.vtu.ac.in/").strip()
-    state_file = Path(os.environ.get("STATE_FILE", "state/site-status.json"))
+    url = MONITOR_URL
     telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     expected_substring = os.environ.get("EXPECTED_SUBSTRING", "").strip()
@@ -103,7 +166,11 @@ def main() -> int:
         print("MONITOR_URL is required", file=sys.stderr)
         return 2
 
-    previous_status = load_state(state_file)
+    if not SUPABASE_KEY:
+        print("SUPABASE_KEY is required", file=sys.stderr)
+        return 2
+
+    previous_status = get_previous_status()
     is_up, reason = site_is_up(url, expected_substring)
     current_status = "up" if is_up else "down"
     checked_at = int(time.time())
@@ -120,10 +187,14 @@ def main() -> int:
         )
     )
 
+    # Save status to Supabase
+    save_status(current_status, reason, checked_at)
+    save_history(current_status, reason, checked_at)
+
+    # Send alert if transitioned from down to up
     if previous_status != current_status and current_status == "up":
         if not telegram_token or not telegram_chat_id:
             print("Telegram secrets are missing, cannot send alert", file=sys.stderr)
-            save_state(state_file, current_status, checked_at)
             return 1
 
         message = (
@@ -135,27 +206,6 @@ def main() -> int:
         )
         send_telegram_message(telegram_token, telegram_chat_id, message, is_alert=True)
         print("Telegram alert sent")
-
-    save_state(state_file, current_status, checked_at)
-    
-    # Log to history
-    history_file = state_file.parent / "history.json"
-    history = []
-    if history_file.exists():
-        try:
-            history = json.loads(history_file.read_text(encoding="utf-8"))
-        except:
-            history = []
-    
-    # Keep last 100 entries
-    history.append({
-        "status": current_status,
-        "timestamp": checked_at,
-        "reason": reason
-    })
-    history = history[-100:]
-    history_file.write_text(json.dumps(history, indent=2) + "\n", encoding="utf-8")
-    
     return 0
 
 
