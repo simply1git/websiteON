@@ -20,6 +20,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Debug: show SUPABASE key presence
+        run: |
+          if [ -z "${SUPABASE_KEY}" ]; then
+            echo "SUPABASE_KEY is NOT set"
+            exit 1
+          else
+            echo "SUPABASE_KEY is set"
+          fi
+
       - name: Check website and alert Telegram
         env:
           MONITOR_URL: https://vtu.internyet.in/dashboard/student/applied-internships
